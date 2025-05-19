@@ -1,0 +1,16 @@
+# Ignorar carpetas de imágenes por sesión
+imagenes pruebas*/
+# Ignorar archivos BMP en cualquier carpeta
+*.bmp
+
+# Opcional: ignorar archivos temporales o backup
+*.tmp
+*.log
+*.bak
+
+# Ignorar archivos de Python compilados
+__pycache__/
+*.pyc
+
+# Ignorar CSV de resultados
+*.csv
