@@ -9,7 +9,7 @@ import pandas as pd
 from threading import Thread
 
 # Control configurable del tiempo entre fotos
-delay_entre_fotos = 0.1  # segundos de espera después de cada captura
+delay_entre_fotos = 0.2  # segundos de espera después de cada captura
 espera_post_final = 1.0  # segundos después de la última captura
 stacking = 1  # número de imágenes por paso
 
