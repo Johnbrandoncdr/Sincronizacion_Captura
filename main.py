@@ -8,25 +8,28 @@ import numpy as np
 import pandas as pd
 from threading import Thread
 
-# Control configurable del tiempo entre fotos
-delay_entre_fotos = 0.2  # segundos de espera después de cada captura
-espera_post_final = 1.0  # segundos después de la última captura
-stacking = 1  # número de imágenes por paso
-
-def stack_images(images):
-    return np.mean(images, axis=0).astype(np.uint8)
+# Parámetros ajustables
+delay_entre_fotos = 0.2  # segundos
+espera_post_final = 1.0  # segundos
+tiempo_integracion_ms = 32  # 32 para la minima de la camara, 160 para 5 veces la integración o 320 para 10 veces
 
 def guardar_imagen_en_hilo(img, filename):
     Thread(target=lambda: cv2.imwrite(filename, img)).start()
 
 # Crear carpeta con nombre basado en fecha y hora
-timestamp_folder = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+timestamp_folder = datetime.datetime.now().strftime("%Y%m%d")
+timestamp_folder = f"{timestamp_folder}_delay{int(delay_entre_fotos * 1000)}ms_int{tiempo_integracion_ms}ms"
+fecha_hoy = datetime.datetime.now().strftime("%Y%m%d")
 output_folder = f'imagenes_{timestamp_folder}'
 os.makedirs(output_folder, exist_ok=True)
 
 # Inicializar cámara
 camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
 camera.Open()
+
+# Establecer tiempo de exposición (en microsegundos)
+camera.ExposureTime.SetValue(tiempo_integracion_ms * 1000)
+
 camera.StartGrabbing(pylon.GrabStrategy_OneByOne)
 
 # Configurar convertidor de imagen
@@ -36,7 +39,15 @@ converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
 
 # Conectar al puerto serial del Arduino
 arduino = serial.Serial('COM5', 9600, timeout=1)
-print(f"Conectado al Arduino\n Guardando imágenes en: {output_folder}")
+print(f"✅ Conectado al Arduino\n📁 Guardando imágenes en: {output_folder}")
+
+# Esperar que Arduino indique que está en home (0°)
+while True:
+    linea = arduino.readline().decode('utf-8').strip()
+    if linea.startswith("ready|"):
+        print("📍 Arduino confirmó posición inicial.")
+        arduino.write(b"ok\n")
+        break
 
 # Lista para guardar tiempos
 resultados = []
@@ -54,37 +65,33 @@ if linea.startswith("capturar|"):
 else:
     angulo = None
 
-# Captura inicial con stacking
-imagenes_stack = []
+# Captura inicial
 start_time = time.perf_counter()
-for _ in range(stacking):
-    grabResult = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
-    if grabResult.GrabSucceeded():
-        image = converter.Convert(grabResult)
-        img = image.GetArray()
-        imagenes_stack.append(img)
-    grabResult.Release()
-    time.sleep(0.05)
+grabResult = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+if grabResult.GrabSucceeded():
+    image = converter.Convert(grabResult)
+    img = image.GetArray()
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    filename = os.path.join(output_folder, f'foto_{contador_fotos + 1}_{fecha_hoy}.bmp')
+    guardar_imagen_en_hilo(img, filename)
 
-imagen_final = stack_images(imagenes_stack)
-timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-filename = os.path.join(output_folder, f'foto_{timestamp}.bmp')
-guardar_imagen_en_hilo(imagen_final, filename)
+    arduino.write(b"ok\n")
+    time.sleep(delay_entre_fotos)
 
-arduino.write(b"ok\n")
-time.sleep(delay_entre_fotos)
+    end_time = time.perf_counter()
+    tiempo_total = (end_time - start_time) * 1000
 
-end_time = time.perf_counter()
-tiempo_total = (end_time - start_time) * 1000
+    resultados.append({
+        "Foto": contador_fotos + 1,
+        "Timestamp": timestamp,
+        "Tiempo total (ms)": round(tiempo_total, 2),
+        "Retraso aprox. sincronización (ms)": round(tiempo_total - tiempo_integracion_ms, 2),
+        "Ángulo (°)": round(angulo, 2) if angulo is not None else "N/A",
+    })
 
-resultados.append({
-    "Foto": contador_fotos + 1,
-    "Timestamp": timestamp,
-    "Tiempo total (ms)": round(tiempo_total, 2),
-    "Retraso aprox. sincronización (ms)": round(tiempo_total - 32, 2),
-    "Ángulo (°)": round(angulo, 2) if angulo is not None else "N/A",
-})
-contador_fotos += 1
+    contador_fotos += 1
+
+grabResult.Release()
 
 # Captura del resto de imágenes
 try:
@@ -98,43 +105,39 @@ try:
                 except (IndexError, ValueError):
                     angulo = None
 
-                print(f"Capturando {stacking} imágenes para paso {contador_fotos + 1}...")
+                print(f"Capturando foto {contador_fotos + 1}...")
 
-                imagenes_stack = []
                 start_time = time.perf_counter()
-                for _ in range(stacking):
-                    grabResult = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
-                    if grabResult.GrabSucceeded():
-                        image = converter.Convert(grabResult)
-                        img = image.GetArray()
-                        imagenes_stack.append(img)
-                    grabResult.Release()
-                    time.sleep(0.05)
+                grabResult = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+                if grabResult.GrabSucceeded():
+                    image = converter.Convert(grabResult)
+                    img = image.GetArray()
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                    filename = os.path.join(output_folder, f'foto_{contador_fotos + 1}_{fecha_hoy}.bmp')
+                    guardar_imagen_en_hilo(img, filename)
 
-                imagen_final = stack_images(imagenes_stack)
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                filename = os.path.join(output_folder, f'foto_{timestamp}.bmp')
-                guardar_imagen_en_hilo(imagen_final, filename)
+                    arduino.write(b"ok\n")
+                    time.sleep(delay_entre_fotos)
 
-                arduino.write(b"ok\n")
-                time.sleep(delay_entre_fotos)
-                end_time = time.perf_counter()
-                tiempo_total = (end_time - start_time) * 1000
+                    end_time = time.perf_counter()
+                    tiempo_total = (end_time - start_time) * 1000
 
-                resultados.append({
-                    "Foto": contador_fotos + 1,
-                    "Timestamp": timestamp,
-                    "Tiempo total (ms)": round(tiempo_total, 2),
-                    "Retraso aprox. sincronización (ms)": round(tiempo_total - 32, 2),
-                    "Ángulo (°)": round(angulo, 2) if angulo is not None else "N/A",
-                })
+                    resultados.append({
+                        "Foto": contador_fotos + 1,
+                        "Timestamp": timestamp,
+                        "Tiempo total (ms)": round(tiempo_total, 2),
+                        "Retraso aprox. sincronización (ms)": round(tiempo_total - tiempo_integracion_ms, 2),
+                        "Ángulo (°)": round(angulo, 2) if angulo is not None else "N/A",
+                    })
 
-                contador_fotos += 1
-                print(f"Foto guardada: {filename} (Total fotos: {contador_fotos})")
+                    contador_fotos += 1
+                    print(f"Foto guardada: {filename} (Total fotos: {contador_fotos})")
 
-                if contador_fotos == TOTAL_FOTOS:
-                    print("Esperando antes de volver al inicio...")
-                    time.sleep(espera_post_final)
+                    if contador_fotos == TOTAL_FOTOS:
+                        print("Esperando antes de volver al inicio...")
+                        time.sleep(espera_post_final)
+
+                grabResult.Release()
 
 except KeyboardInterrupt:
     print("Programa detenido manualmente")

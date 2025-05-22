@@ -1,5 +1,6 @@
 # Ignorar carpetas de imágenes por sesión
 imagenes pruebas malas/
+imagenes con stacking/
 
 # Opcional: ignorar archivos temporales o backup
 *.tmp
