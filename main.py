@@ -43,6 +43,7 @@ converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
 # Inicializar espectrómetro
 # ============================
 espectro = Spectrometer.from_first_available()
+espectro.integration_time_micros(tiempo_integracion_ms * 1000)  # configurar igual que la cámara
 longitudes_onda = espectro.wavelengths()
 print("Espectrómetro conectado")
 

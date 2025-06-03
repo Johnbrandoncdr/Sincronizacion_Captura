@@ -1,7 +1,8 @@
 # Ignorar carpetas de imágenes por sesión
 imagenes pruebas malas/
 imagenes con stacking/
-
+imagenes pruebas exitosas/
+imagenes pruebas buenas sin espectrofotometro/
 # Opcional: ignorar archivos temporales o backup
 *.tmp
 *.log
