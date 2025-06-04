@@ -3,6 +3,7 @@ imagenes pruebas malas/
 imagenes con stacking/
 imagenes pruebas exitosas/
 imagenes pruebas buenas sin espectrofotometro/
+imagenes pruebas exitosas con sistema arreglado de deteccion de picos/
 # Opcional: ignorar archivos temporales o backup
 *.tmp
 *.log
